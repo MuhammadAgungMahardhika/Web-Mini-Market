@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="https://www.thymeleaf.com" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{fragments/layout}">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User management</title>
+  <!-- databale css -->
+  <link rel="stylesheet" href="/assets/extensions/datatables.net-bs5/css/dataTables.bootstrap5.min.css" />
+  <link rel="stylesheet" href="/assets/css/pages/datatables.css" />
+</head>
+
+<body>
+  <section layout:fragment="content">
+    <div class="page-heading">
+      <h1>USER MANAGEMENT</h1>
+
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="card-header">
+          <button type="button" value="Admin" class="btn btn-outline-primary block" data-bs-toggle="modal"
+            data-bs-target="#default" onclick="registerModal(this.value)">
+            Register
+          </button>
+        </div>
+        <div class="card-body">
+          <table class="table" id="table1">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Email</th>
+                <th>Firstname</th>
+                <th>Lastname</th>
+                <th>Age</th>
+                <th>Status</th>
+                <th>Role</th>
+                <th class="text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="showdata"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.datatables.net/v/bs5/dt-1.12.1/datatables.min.js"></script>
+    <script>
+      reloadData();
+      function reloadData() {
+        $.ajax({
+          url: host + "userservice/users",
+          type: "GET",
+          contentType: "application/json",
+          success: function (userData) {
+            let str = "";
+            for (let i = 0; i < userData.length; i++) {
+              str += `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${userData[i].email}</td>
+                <td>${userData[i].firstName}</td>
+                <td>${userData[i].lastName}</td>
+                <td>${userData[i].age}</td>
+                <td><span class="badge ${userData[i].status == "Active" ? "bg-success" : "bg-secondary"
+                }">${userData[i].status}</span>
+                </td>
+                <td>${userData[i].role}</td>
+                <td class="text-center">
+                    <button
+                      value="${userData[i].id}"
+                      onclick="getEditingUser(this.value)"
+                      type="button"
+                      value="Admin"
+                      class="btn btn-outline-warning block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-edit"></i>
+                    </button>
+                    <button
+                      onclick="deleteModal(${userData[i].id},'${userData[i].firstName + " " + userData[i].lastName
+                }')"
+                      class="btn btn-outline-danger block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-trash"></i>
+                    </button>
+                  </td>
+              </tr>`;
+            }
+            $("#showdata").html(str);
+            initDataTable()
+          },
+        });
+      }
+
+      function getEditingUser(id) {
+        $.ajax({
+          url: host + `userservice/user/${id}`,
+          type: "GET",
+          contentType: "application/json",
+          success: function (userData) {
+            editModal(userData);
+          },
+        });
+      }
+      function editModal(userData) {
+        $(".modal-title").html("Editing user data");
+        $(".modal-body").html(
+          ` <div class="modal-body">
+              <label for="email">Email: </label>
+                  <div class="form-group">
+                    <input id="email" value="${userData.email
+          }" type="text" placeholder="Email Address" class="form-control">
+                  </div>
+              <label for="firstname">Firstname: </label>
+                  <div class="form-group">
+                    <input id="firstname" value="${userData.firstName
+          }" type="text" placeholder="firstname" class="form-control" >
+                  </div>
+              <label for="lastname">Lastname: </label>
+                  <div class="form-group">
+                    <input id="lastname" value="${userData.lastName
+          }" type="text" placeholder="lastname" class="form-control" >
+                  </div>
+              <label for="age">Age: </label>
+                  <div class="form-group">
+                    <input id="age" type="number" value="${userData.age
+          }" placeholder="age"  class="form-control">
+                  </div>
+              <label for="status">Status: </label>
+                  <select class="form-select" id="status">
+                     <option ${userData.status == "Active" ? "selected='' " : ""
+          } value="Active">Active</option>
+                     <option ${userData.status == "Non-active" ? "selected='' " : ""
+          } value="Non-active">Non-active</option>
+                  </select>
+              <label for="role">Role: </label>
+                  <select class="form-select" id="role">
+                     <option ${userData.role == "Admin" ? "selected='' " : ""
+          } value="Admin">Admin</option>
+                     <option ${userData.role == "Costumer" ? "selected='' " : ""
+          } value="Costumer">Costumer</option>
+                  </select>
+                  <input type="hidden" id="password" value="${userData.password
+          }">
+
+            </div>`
+        );
+        $(".modal-footer").html(
+          `<button type="reset" class="btn" onclick="resetForm()">
+                <i class="bx bx-x d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Reset</span>
+              </button>
+              <button
+                type="button"
+                value="Admin"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="updateUser(${userData.id})"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>`
+        );
+      }
+      function updateUser(id) {
+        const email = $("#email").val();
+        const firstname = $("#firstname").val();
+        const lastname = $("#lastname").val();
+        const age = $("#age").val();
+        const status = $("#status").val();
+        const role = $("#role").val();
+        const password = $("#password").val();
+
+        let data = {
+          email: email,
+          firstName: firstname,
+          lastName: lastname,
+          age: age,
+          status: status,
+          role: role,
+          password: password,
+        };
+
+        $.ajax({
+          url: host + `userservice/user/${id}`,
+          type: "PUT",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `User Edited`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+          error: function (err) {
+            console.log(err);
+          },
+        });
+      }
+
+      function deleteModal(id, name) {
+        $(".modal-title").html(`Delete confirmation`);
+        $(".modal-body").html(
+          `Are you sure delete <b> ${name} </b> from the system?`
+        );
+        $(".modal-footer").html(
+          `<button
+              type="button"
+              value="${id}"
+              class="btn btn-danger ms-1"
+              data-bs-dismiss="modal"
+              onclick="deleteUser(this.value)"
+            >
+              <i class="bx bx-check d-block d-sm-none"></i>
+              <span class="d-none d-sm-block">Delete user</span>
+            </button>`
+        );
+      }
+
+      function deleteUser(id) {
+        $.ajax({
+          url: host + `userservice/user/${id}`,
+          type: "DELETE",
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `${response}`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+        });
+      }
+    </script>
+  </section>
+</body>
+
+</html>

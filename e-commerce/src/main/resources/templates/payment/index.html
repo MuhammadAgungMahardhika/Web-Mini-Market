@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="https://www.thymeleaf.com" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{fragments/layout}">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment</title>
+</head>
+
+<body>
+  <section layout:fragment="content">
+    <div class="page-heading">
+      <h1>Payment</h1>
+    </div>
+    <div class="page-content">
+      <section class="row">
+        <div class="col-12 col-lg-12">
+          <div class="card">
+            <div class="card-header">
+              <div class="row">
+                <div class="col-8 text-start" id="colBtn">
+                  <button data-bs-toggle="modal" data-bs-target="#default" class="btn btn-success" id="btnPay"
+                    onclick="payModal()">
+                    Pay
+                  </button>
+                  <button class="btn btn-warning">
+                    Cancel
+                  </button>
+                  <input type="hidden" disabled id="cart_id">
+                </div>
+                <div class="col-4 text-end">
+                  <ul class="list-group text-sm">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span> Transaction status.</span>
+                      <span id="cart_status" class="badge bg-secondary badge-pill badge-round ml-1"></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span> Transaction number</span>
+                      <span id="cart_number">7</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span> Transaction date</span>
+                      <span id="created_at"></span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <hr>
+            <div class="card-body">
+              <table class="table table-border">
+                <thead>
+                  <tr class="text-center">
+                    <th>Product</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="datapayment"></tbody>
+                <tfoot class="bg-light" id="tfoot"></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <script>
+      const url = window.location.href.split('/')
+      const cartId = url[url.length - 1]
+      let cartData = getCartById(cartId)
+      reloadCartTable(cartId)
+
+      function reloadCartTable(cart_id) {
+        writeCartInformation()
+        let cartProductData = getProductFromCartById(cart_id);
+
+        if (cartProductData.length == 0) {
+          $("#datapayment").html(`
+            <tr class="text-center">
+                <td colspan="5" >
+                  No data data to pay
+                </td>
+            </tr>`);
+          $("#tfoot").html("");
+        } else {
+          writeProductsToCartTable(cartProductData);
+        }
+      }
+
+      function writeCartInformation() {
+        let cart = getCartById(cartId)
+
+        let cartStatus = cart.status
+        let cartNumber = cart.cartNumber
+        let cartCreatedAt = cart.createdAt
+
+        $("#cart_status").html(cart.status)
+        $("#cart_number").html(cart.cartNumber)
+        $("#cart_id").val(cart.id)
+        $("#created_at").html(cart.createdAt)
+
+        if (cartStatus == "Paid") {
+          $("#cart_status").removeClass("bg-secondary")
+          $("#cart_status").addClass("bg-success")
+          $("#btnPay").html("paid")
+          $("#btnPay").prop("disabled", true)
+        }
+      }
+
+      function getProductFromCartById(cart_id) {
+        let result;
+        $.ajax({
+          url: host + `orderservice/getProductFromCart/${cart_id}`,
+          type: "GET",
+          contentType: "application/json",
+          async: false,
+          success: function (cart) {
+            result = cart;
+          },
+        });
+        return result;
+      }
+      function writeProductsToCartTable(productFromCart) {
+        let str = "";
+        let countTotal = 0;
+        let qtyTotal = 0;
+        for (i = 0; i < productFromCart.length; i++) {
+          let total = productFromCart[i].price * productFromCart[i].quantity;
+          countTotal += total;
+          qtyTotal += productFromCart[i].quantity;
+          str += `
+              <tr class="text-center">
+                <td class="text-start">${productFromCart[i].name}</td>
+                <td class="text-end">${formatter.format(
+            productFromCart[i].price
+          )}</td>
+                <td >${productFromCart[i].quantity}</td>
+                <td class="text-end">${formatter.format(total)}</td>
+              </tr>
+            `;
+        }
+        $("#datapayment").html(str);
+        $("#tfoot").html(`
+          <tr class="text-center">
+             <th>Total</th>
+             <td></td>
+             <td>${qtyTotal}</td>
+             <td id="total" class="text-end"> ${countTotal}</td>
+             <td class="text-end"> </td>
+          </tr>`);
+      }
+
+      function payModal() {
+        let str = `
+        Total<br><input type="number" disabled id="totalpay" class="form-control text-end">
+        Payment<br><input type="number" id="paycash" onkeyup="change(this.value)" class="form-control text-end">
+        Change<br><input type="number" id="change" class="form-control text-end">
+        <br>
+        <button onclick="payConfirm()" class="btn btn-primary">Pay!</button>
+        <button onclick="closeModal()" class="btn btn-warning">Cancel</button>
+        `;
+        $(".modal-title").html("Payment")
+        $(".modal-body").html(str)
+
+        $("#totalpay").val(parseInt($('#total').text()));
+
+      }
+
+      function change(val) {
+        let totalPay = $("#totalpay").val()
+        $("#change").val(val - totalPay)
+      }
+
+      function payConfirm() {
+        let paycash = $('#paycash').val()
+        let totalPay = $("#totalpay").val()
+        let changePay = $("#change").val()
+
+        if (changePay < 0) {
+          toastFailed("Not enough money")
+        } else if (changePay == "") {
+          toastFailed("Please input the payment")
+        } else {
+          const data = {
+            cartId: cartId,
+            costumerId: localStorage.getItem('id'),
+            pay: paycash,
+            total: totalPay,
+            status: "confirm"
+          }
+
+          let resultPayment = addPayment(data)
+
+          let cartDataUpdating = {
+            "cartNumber": cartData.cartNumber,
+            "costumerId": localStorage.getItem("id"),
+            "createdAt": cartData.createdAt,
+            "status": "Paid"
+          }
+          let updatedCartData = updateCart(cartDataUpdating);
+
+          Swal.fire({
+            position: "top-end",
+            icon: "success",
+            title: "Payment success",
+            showConfirmButton: true,
+            timer: 1500,
+          }).then((result) => {
+            closeModal()
+            writeCartInformation();
+            // location.replace(`/pages/order`);
+          });
+
+        }
+
+      }
+
+      function updateCart(cart) {
+        let result = ""
+        $.ajax({
+          url: host + `orderservice/cart/${cartId}`,
+          type: "PUT",
+          data: JSON.stringify(cart),
+          contentType: "application/json",
+          async: false,
+          success: function (reponse) {
+            result = reponse
+          }
+        })
+        return result
+      }
+
+      function addPayment(data) {
+        let result;
+        $.ajax({
+          url: host + 'paymentservice/payments',
+          type: "POST",
+          dataType: 'json',
+          data: JSON.stringify(data),
+          contentType: 'application/json',
+          async: false,
+          success: function (payData) {
+            result = payData;
+          }
+        });
+        return result;
+      }
+    </script>
+  </section>
+</body>
+
+</html>

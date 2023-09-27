@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="https://www.thymeleaf.com" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{fragments/layout}">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lookup Managemenet</title>
+  <!-- databale css -->
+  <link rel="stylesheet" href="/assets/extensions/datatables.net-bs5/css/dataTables.bootstrap5.min.css" />
+  <link rel="stylesheet" href="/assets/css/pages/datatables.css" />
+</head>
+
+<body>
+  <section layout:fragment="content">
+    <div class="page-heading">
+      <h1>LOOKUP MANAGEMENT</h1>
+
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="card-header">
+          <button type="button" class="btn btn-outline-primary block" data-bs-toggle="modal" data-bs-target="#default"
+            onclick="addLookUpModal()">
+            ADD LOOKUP
+          </button>
+        </div>
+        <div class="card-body">
+          <table class="table" id="table1">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Type</th>
+                <th>Unit</th>
+                <th>Status</th>
+                <th class="text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="showdata"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.datatables.net/v/bs5/dt-1.12.1/datatables.min.js"></script>
+    <script>
+      reloadData();
+      function reloadData() {
+        $.ajax({
+          url: "http://localhost:9001/lookupservice/lookups",
+          type: "GET",
+          contentType: "application/json",
+          success: function (LookupData) {
+            let str = "";
+            for (let i = 0; i < LookupData.length; i++) {
+              str += `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${LookupData[i].type}</td>
+                <td>${LookupData[i].unit}</td>
+                <td><span class="badge ${LookupData[i].status == "Active"
+                  ? "bg-success"
+                  : "bg-secondary"
+                }">${LookupData[i].status}</span>
+                </td>
+                <td class="text-center">
+                    <button
+                      value="${LookupData[i].id}"
+                      onclick="getEditingLookup(this.value)"
+                      type="button"
+                      class="btn btn-outline-warning block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-edit"></i>
+                    </button>
+                    <button
+                      onclick="deleteModal(${LookupData[i].id},'${LookupData[i].type + "-" + LookupData[i].unit
+                }')"
+                      class="btn btn-outline-danger block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-trash"></i>
+                    </button>
+                  </td>
+              </tr>`;
+            }
+            $("#showdata").html(str);
+            initDataTable()
+
+          },
+        });
+      }
+
+      function addLookUpModal() {
+        $(".modal-title").html("Adding new lookup");
+        $(".modal-body").html(`
+            <div class="modal-body">
+              <label for="type">Type: </label>
+                  <select class="form-select" id="type">
+                     <option value="text">Text</option>
+                     <option value="number">Number</option>
+                     <option value="decimal">Decimal</option>
+                  </select>
+              <label for="unit">Unit: </label>
+                  <div class="form-group">
+                    <input id="unit" type="text" placeholder="unit" class="form-control" >
+                  </div>
+                  <input type="hidden" value="Active" id="status"></input>
+            </div>
+            `);
+        $(".modal-footer").html(`
+              <button type="reset" class="btn" onclick="resetForm()">
+                <i class="bx bx-x d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Reset</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="saveLookUp()"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>
+            `);
+      }
+
+      function getEditingLookup(id) {
+        $.ajax({
+          url: `http://localhost:9001/lookupservice/lookup/${id}`,
+          type: "GET",
+          contentType: "application/json",
+          success: function (LookupData) {
+            editModal(LookupData);
+          },
+        });
+      }
+      function editModal(LookupData) {
+        $(".modal-title").html("Editing Lookup data");
+        $(".modal-body").html(
+          ` <div class="modal-body">
+              <label for="type">Type: </label>
+                  <select class="form-select" id="type">
+                     <option value="decimal">Decimal</option>
+                     <option value="number">Number</option>
+                     <option value="text">Text</option>
+                  </select>
+              <label for="unit">Unit: </label>
+                  <div class="form-group">
+                    <input id="unit" value="${LookupData.unit
+          }" type="text" placeholder="unit" class="form-control" >
+                  </div>
+              <label for="status">Status: </label>
+                  <select class="form-select" id="status">
+                     <option ${LookupData.status == "Active" ? "selected='' " : ""
+          } value="Active">Active</option>
+                     <option ${LookupData.status == "Non-active" ? "selected='' " : ""
+          } value="Non-active">Non-active</option>
+                     <option ${LookupData.status == "Removed" ? "selected='' " : ""
+          } value="Non-active">Removed</option>
+                  </select>
+            </div>`
+        );
+        $(".modal-footer").html(
+          `<button type="reset" class="btn" onclick="resetForm()">
+                <i class="bx bx-x d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Reset</span>
+              </button>
+              <button
+                type="button"
+                value="Admin"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="updateLookup(${LookupData.id})"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>`
+        );
+      }
+      function resetForm() {
+        $("#type").val("");
+        $("#unit").val("");
+      }
+      function saveLookUp() {
+        const type = $("#type").val();
+        const unit = $("#unit").val();
+        const status = $("#status").val();
+
+        let data = {
+          type: type,
+          unit: unit,
+          status: status,
+        };
+        $.ajax({
+          url: "http://localhost:9001/lookupservice/lookups",
+          type: "POST",
+          dataType: "json",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function (userData) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: "Lookup added",
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+          error: function (err) {
+            console.log(err.responseText);
+          },
+        });
+      }
+      function updateLookup(id) {
+        const type = $("#type").val();
+        const unit = $("#unit").val();
+        const status = $("#status").val();
+
+        let data = {
+          type: type,
+          unit: unit,
+          status: status,
+        };
+
+        $.ajax({
+          url: `http://localhost:9001/lookupservice/lookup/${id}`,
+          type: "PUT",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `Lookup Edited`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+          error: function (err) {
+            console.log(err);
+          },
+        });
+      }
+
+      function deleteModal(id, typeAndUnit) {
+        $(".modal-title").html(`Delete confirmation`);
+        $(".modal-body").html(
+          `Are you sure delete <b> ${typeAndUnit} </b> from the system?`
+        );
+        $(".modal-footer").html(
+          `<button
+              type="button"
+              value="${id}"
+              class="btn btn-danger ms-1"
+              data-bs-dismiss="modal"
+              onclick="deleteLookUp(this.value)"
+            >
+              <i class="bx bx-check d-block d-sm-none"></i>
+              <span class="d-none d-sm-block">Delete Lookup</span>
+            </button>`
+        );
+      }
+
+      function deleteLookUp(id) {
+        $.ajax({
+          url: `http://localhost:9001/lookupservice/lookup/${id}`,
+          type: "DELETE",
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `${response}`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+        });
+      }
+    </script>
+  </section>
+</body>
+
+</html>

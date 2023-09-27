@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="https://www.thymeleaf.com" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{fragments/layout}">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Managemenet</title>
+  <!-- databale css -->
+  <link rel="stylesheet" href="/assets/extensions/datatables.net-bs5/css/dataTables.bootstrap5.min.css" />
+  <link rel="stylesheet" href="/assets/css/pages/datatables.css" />
+</head>
+
+<body>
+  <section layout:fragment="content">
+    <div class="page-heading">
+      <h1>PRODUCT MANAGEMENT</h1>
+
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="card-header">
+          <button type="button" class="btn btn-outline-primary block" data-bs-toggle="modal" data-bs-target="#default"
+            onclick="addProductModal()">
+            ADD NEW PRODUCT
+          </button>
+          <button type="button" class="btn btn-outline-danger block" onclick="exportToPdf()">
+            <i class="fa fa-file-pdf-o"></i>
+          </button>
+        </div>
+        <div class="card-body">
+          <table class="table" id="table1">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Unit</th>
+                <th>SKU</th>
+                <th>Description</th>
+                <th>Price</th>
+                <th>Volume</th>
+                <th>Stock</th>
+                <th>Status</th>
+                <th class="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="showdata"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.datatables.net/v/bs5/dt-1.12.1/datatables.min.js"></script>
+    <script>
+      reloadData();
+      function reloadData() {
+        let productData = getProducts();
+        let str = "";
+        for (i = 0; i < productData.length; i++) {
+          str += `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${productData[i].name}</td>
+                <td>${productData[i].categories.name}</td>
+                <td>${getLookupById(productData[i].attributeId)}</td>
+                <td>${productData[i].sku}</td>
+                <td>${productData[i].description}</td>
+                <td>${productData[i].price}</td>
+                <td>${productData[i].volume}</td>
+                <td>${productData[i].stock}</td>
+                <td><span class="badge ${productData[i].status == "Active"
+              ? "bg-success"
+              : "bg-secondary"
+            }">${productData[i].status}</span>
+                </td>
+                <td class="text-center">
+                    <button
+                      value="${productData[i].id}"
+                      onclick="getEditingProduct(this.value)"
+                      type="button"
+                      class="btn btn-outline-warning block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-edit"></i>
+                    </button>
+                    <button
+                      onclick="deleteModal(${productData[i].id},'${productData[i].name
+            }')"
+                      class="btn btn-outline-danger block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-trash"></i>
+                    </button>
+                  </td>
+              </tr>`;
+        }
+        $("#showdata").html(str);
+        initDataTable()
+      }
+
+      function addProductModal() {
+        let modalForm2 = `
+        <div class="modal-body">
+          <label for="category_id">Product category: </label>
+              <select class="form-select" id="category_id">
+              </select>
+          <label for="attribute_id">Product attribute: </label>
+              <select class="form-select" id="attribute_id">
+              </select>
+          
+              
+          <div class="form-group">
+              <label for="sku" class="form-label">Sku</label>
+              <input type="text" id="sku" class="form-control" placeholder="sku" data-parsley-required="true">
+              
+          </div>
+          
+          <div class="form-group mandatory">
+              <label for="name" class="form-label">Name</label>
+              <input type="text" onkeyup="validateName()" id="name" class="form-control" placeholder="Name" data-parsley-required="true" >
+              
+              <div class="parsley-error filled" id="parsley-id-2" aria-hidden="false">
+                <span id="name-err" class="parsley-required text-danger"></span>
+              </div>
+          </div>
+          
+          <div class="form-group">
+              <label for="description" class="form-label">Description</label>
+              <input type="text" id="description" class="form-control" placeholder="description" data-parsley-required="true">
+              
+          </div>
+          
+          <div class="form-group mandatory">
+              <label for="price" class="form-label">Price</label>
+              <input type="number" onkeyup="validatePrice()" id="price" class="form-control" placeholder="price" data-parsley-required="true">
+              
+              <div class="parsley-error filled" id="parsley-id-4" aria-hidden="false">
+                <span id="price-err" class="parsley-required text-danger"></span>
+              </div>
+          </div>
+          
+          <div class="form-group">
+              <label for="volume" class="form-label">Volume</label>
+              <input type="number" id="volume" class="form-control" placeholder="volume" data-parsley-required="true">
+          </div>
+
+          <div class="form-group mandatory">  
+              <label for="stock" class="form-label">Stock</label>
+              <input type="number" onkeyup="validateStock()" id="stock" class="form-control" placeholder="stock" data-parsley-required="true">
+              
+              <div class="parsley-error filled" id="parsley-id-6" aria-hidden="false">
+                <span id="stock-err" class="parsley-required text-danger"></span>
+              </div>
+          </div>
+          
+          <label for="status">Status: </label>
+              <select class="form-select" id="status">
+                <option value="Active">Active</option>
+                <option value="Non-active">Non-active</option>
+                <option value="Removed">Removed</option>
+              </select>
+        </div>
+        `
+        let modalForm = `
+            <div class="modal-body">
+              <label for="category_id">Product category: </label>
+                  <select class="form-select" id="category_id">
+                  </select>
+              <label for="attribute_id">Product attribute: </label>
+                  <select class="form-select" id="attribute_id">
+                  </select>
+              <label for="sku">SKU </label>
+                  <div class="form-group">
+                    <input id="sku" type="text" placeholder="sku id" class="form-control" >
+                  </div>
+              <label for="name">Name: </label>
+                  <div class="form-group">
+                    <input id="name" type="text" placeholder="name" class="form-control" >
+                  </div>
+              <label for="description">Description: </label>
+                  <div class="form-group">
+                    <input id="description" type="text" placeholder="description" class="form-control" >
+                  </div>
+              <label for="price">Price: </label>
+                  <div class="form-group">
+                    <input id="price" type="number" placeholder="price" class="form-control" >
+                  </div>
+              <label for="volume">Volume: </label>
+                  <div class="form-group">
+                    <input id="volume" type="number" placeholder="volume" class="form-control" >
+                  </div>
+              <label for="stock">Stock: </label>
+                  <div class="form-group">
+                    <input id="stock" type="number" placeholder="stock" class="form-control" >
+                  </div>
+               <label for="status">Status: </label>
+                  <select class="form-select" id="status">
+                     <option value="Active">Active</option>
+                     <option value="Non-active">Non-active</option>
+                     <option value="Removed">Removed</option>
+                  </select>
+            </div>
+            `;
+        $(".modal-title").html("Adding new product");
+        $(".modal-body").html(modalForm2);
+        loadCategoryData();
+        loadLookupData();
+        $(".modal-footer").html(`
+              <button type="reset" class="btn" onclick="resetForm()">
+                <i class="bx bx-x d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Reset</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="saveProduct()"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>
+            `);
+      }
+      function loadCategoryData(categoryId = null) {
+        $.ajax({
+          url: host + "storeservice/categories",
+          type: "GET",
+          async: false,
+          contentType: "application/json",
+          success: function (categoryData) {
+            let str = "";
+            for (i = 0; i < categoryData.length; i++) {
+              if (categoryId != null) {
+                str += `<option ${categoryData[i].id == categoryId ? "selected" : ""
+                  } value="${categoryData[i].id}">${categoryData[i].name
+                  }</option>`;
+              } else {
+                str += `<option value="${categoryData[i].id}">${categoryData[i].name}</option>`;
+              }
+            }
+            $("#category_id").html(str);
+          },
+        });
+      }
+      function loadLookupData(attributeId = null) {
+        $.ajax({
+          url: host + "lookupservice/lookups",
+          type: "GET",
+          async: false,
+          contentType: "application/json",
+          success: function (lookupData) {
+            let str = "";
+            for (i = 0; i < lookupData.length; i++) {
+              if (attributeId != null) {
+                str += `<option ${lookupData[i].id == attributeId ? "selected" : ""
+                  } value="${lookupData[i].id}">${lookupData[i].unit}</option>`;
+              } else {
+                str += `<option value="${lookupData[i].id}">${lookupData[i].unit}</option>`;
+              }
+            }
+            $("#attribute_id").html(str);
+          },
+        });
+      }
+
+      function getEditingProduct(id) {
+        $.ajax({
+          url: host + `storeservice/product/${id}`,
+          type: "GET",
+          contentType: "application/json",
+          success: function (ProductData) {
+            editModal(ProductData);
+          },
+        });
+      }
+      function editModal(ProductData) {
+        let modalForm = `
+            <div class="modal-body">
+              <label for="category_id">Product category: </label>
+                  <select class="form-select" id="category_id">
+                  </select>
+              <label for="attribute_id">Product attribute: </label>
+                  <select class="form-select" id="attribute_id">
+                  </select>
+              <label for="sku">SKU </label>
+                  <div class="form-group">
+                    <input id="sku" value="${ProductData.sku
+          }" type="text" placeholder="sku id" class="form-control" >
+                  </div>
+              <label for="name">Name: </label>
+                  <div class="form-group">
+                    <input id="name" value="${ProductData.name
+          }" type="text" placeholder="name" class="form-control" >
+                  </div>
+              <label for="description">Description: </label>
+                  <div class="form-group">
+                    <input id="description" value="${ProductData.description
+          }" type="text" placeholder="description" class="form-control" >
+                  </div>
+              <label for="price">Price: </label>
+                  <div class="form-group">
+                    <input id="price" value="${ProductData.price
+          }" type="number" placeholder="price" class="form-control" >
+                  </div>
+              <label for="volume">Volume: </label>
+                  <div class="form-group">
+                    <input id="volume" value="${ProductData.volume
+          }"  type="number" placeholder="volume" class="form-control" >
+                  </div>
+              <label for="stock">Stock: </label>
+                  <div class="form-group">
+                    <input id="stock" value="${ProductData.stock
+          }" type="number" placeholder="stock" class="form-control" >
+                  </div>
+               <label for="status">Status: </label>
+                  <select class="form-select" id="status">
+                     <option ${ProductData.status == "Active" ? "selected='' " : ""
+          } value="Active">Active</option>
+                     <option ${ProductData.status == "Non-active" ? "selected='' " : ""
+          } value="Non-active">Non-active</option>
+                     <option ${ProductData.status == "Removed" ? "selected='' " : ""
+          } value="Non-active">Removed</option>
+                  </select>
+            </div>
+            `;
+        $(".modal-title").html("Editing Product data");
+        $(".modal-body").html(modalForm);
+        loadCategoryData(ProductData.categoryId);
+        loadLookupData(ProductData.attributeId);
+        $(".modal-footer").html(
+          `<button
+                type="button"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="updateProduct(${ProductData.id})"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>`
+        );
+      }
+      function resetForm() {
+        $("#name").val("");
+        $("#description").val("");
+      }
+
+      function isInputValid() {
+        let valid = true
+        let name = validateName()
+        let price = validatePrice()
+        let stock = validateStock()
+
+        let backendCheck = checkIsDuplicatProduct($("#sku").val(), $("#name").val());
+
+        // front end validation
+        if (!name) {
+          console.log("validate name first")
+          valid = false
+        } else if (!price) {
+          console.log("validate price first")
+          valid = false
+        } else if (!stock) {
+          console.log("validate stock first")
+          valid = false
+        } else if (backendCheck > 0) {
+          toastFailed("Duplicate data entry!")
+          valid = false
+        } else {
+          console.log("semua valid")
+          valid = true
+        }
+
+        return valid;
+      }
+
+      function checkIsDuplicatProduct(sku, name) {
+        let result = ""
+        $.ajax({
+          url: host + `storeservice/getValidate/${sku}/${name}`,
+          type: "GET",
+          contentType: "application/json",
+          async: false,
+          success: function (response) {
+            result = response
+          }
+        })
+        return result
+      }
+
+      function validateName() {
+        let valid = true
+        let name = $("#name").val()
+
+        if (name.length < 3) {
+          valid = false
+          $("#name").addClass("is-invalid")
+          $("#name-err").html("3 letters at least")
+        } else {
+          valid = true
+          $("#name").removeClass("is-invalid")
+          $("#name-err").html("")
+        }
+        return valid
+      }
+
+      function validatePrice() {
+        let valid = true
+        let price = $("#price").val()
+        if (price < 100) {
+          valid = false
+          $("#price").addClass("is-invalid")
+          $("#price-err").html("Rp. 100 price at least")
+
+        } else {
+          valid = true
+          $("#price").removeClass("is-invalid")
+          $("#price-err").html("")
+        }
+        return valid
+      }
+      function validateStock() {
+        let valid = true
+        let stock = $("#stock").val()
+        if (stock < 1) {
+          valid = false
+          $("#stock").addClass("is-invalid")
+          $("#stock-err").html("1 stock at least")
+
+        } else {
+          valid = true
+          $("#stock").removeClass("is-invalid")
+          $("#stock-err").html("")
+        }
+        return valid
+      }
+
+      function saveProduct() {
+        let valid = isInputValid()
+
+        if (valid) {
+          const categoryId = $("#category_id").val();
+          const attributeId = $("#attribute_id").val();
+          const sku = $("#sku").val();
+          const name = $("#name").val();
+          const description = $("#description").val();
+          const price = $("#price").val();
+          const volume = $("#volume").val();
+          const stock = $("#stock").val();
+          const sold = $("#sold").val();
+          const status = $("#status").val();
+
+          let data = {
+            categoryId: categoryId,
+            attributeId: attributeId,
+            sku: sku,
+            name: name,
+            description: description,
+            price: price,
+            volume: volume,
+            stock: stock,
+            sold: sold,
+            status: status,
+          };
+          $.ajax({
+            url: host + "storeservice/products",
+            type: "POST",
+            dataType: "json",
+            data: JSON.stringify(data),
+            async: false,
+            contentType: "application/json",
+            success: function (userData) {
+              Swal.fire({
+                position: "top-end",
+                icon: "success",
+                title: "Product added",
+                showConfirmButton: false,
+                timer: 1500,
+              }).then((result) => {
+                reloadData()
+              });
+            },
+            error: function (err) {
+              console.log(err.responseText);
+            },
+          });
+        } else {
+          toastFailed("Failed to add new product!")
+        }
+      }
+      function updateProduct(id) {
+        const categoryId = $("#category_id").val();
+        const attributeId = $("#attribute_id").val();
+        const sku = $("#sku").val();
+        const name = $("#name").val();
+        const description = $("#description").val();
+        const price = $("#price").val();
+        const volume = $("#volume").val();
+        const stock = $("#stock").val();
+        const sold = $("#sold").val();
+        const status = $("#status").val();
+
+        let data = {
+          categoryId: categoryId,
+          attributeId: attributeId,
+          sku: sku,
+          name: name,
+          description: description,
+          price: price,
+          volume: volume,
+          stock: stock,
+          sold: sold,
+          status: status,
+        };
+
+        $.ajax({
+          url: host + `storeservice/product/${id}`,
+          type: "PUT",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function (response) {
+            console.log(response);
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `Product Edited`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              reloadData();
+            });
+          },
+          error: function (err) {
+            console.log(err);
+          },
+        });
+      }
+
+      function deleteModal(id, name) {
+        $(".modal-title").html(`Delete confirmation`);
+        $(".modal-body").html(
+          `Are you sure delete <b> ${name} </b> from the system?`
+        );
+        $(".modal-footer").html(
+          `<button
+              type="button"
+              value="${id}"
+              class="btn btn-danger ms-1"
+              data-bs-dismiss="modal"
+              onclick="deleteProduct(this.value)"
+            >
+              <i class="bx bx-check d-block d-sm-none"></i>
+              <span class="d-none d-sm-block">Delete Product</span>
+            </button>`
+        );
+      }
+
+      function deleteProduct(id) {
+        $.ajax({
+          url: host + `storeservice/product/${id}`,
+          type: "DELETE",
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `${response}`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+        });
+      }
+
+      function exportToPdf() {
+        window.open("/pages/store/product/pdf", "_blank");
+      }
+
+
+    </script>
+  </section>
+</body>
+
+</html>

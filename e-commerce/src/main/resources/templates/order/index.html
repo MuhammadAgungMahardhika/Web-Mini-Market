@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="https://www.thymeleaf.com" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{fragments/layout}">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order</title>
+</head>
+
+<body>
+  <section layout:fragment="content">
+    <div class="page-heading">
+      <h1>Order</h1>
+    </div>
+    <div class="page-content">
+      <section class="row">
+        <div class="col-12 col-lg-12">
+          <div class="card">
+            <div class="card-header">
+              <div class="row">
+                <div class="col-6 text-start">
+                  <button data-bs-toggle="modal" data-bs-target="#default" class="btn btn-success"
+                    onclick="addModalItem()">
+                    Add items
+                  </button>
+                  <button id="confirm" onclick="confirm(this.value)" class="btn btn-primary">
+                    Confirm
+                  </button>
+                </div>
+                <div class="col-6 text-end">
+                  <span id="orderStatus" class="badge bg-light-secondary">Secondary</span>
+                  <select onchange="reloadCartTable(this.value)" class="form-select m-2" id="cartOption"></select>
+                  <input type="hidden" size="25" id="cart_id" />
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <table class="table table-border">
+                <thead>
+                  <tr class="text-center">
+                    <th>No</th>
+                    <th>Product</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="dataorder"></tbody>
+                <tfoot id="tfoot"></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <script>
+      addNewCartId();
+      addCartOption(localStorage.getItem("id"));
+
+      function addNewCartId() {
+        let now = new Date();
+        const data = {
+          costumerId: Number(localStorage.getItem("id")),
+          createdAt: Date.now(),
+          cartNumber: now.getTime(),
+          status: "Pending",
+        };
+        let cartData = addCart(data);
+        reloadCartTable(cartData.id);
+      }
+
+      function addCartOption(id) {
+        let str = "";
+        let cartData = getCartsFromUserId(id);
+        for (i = 0; i < cartData.length; i++) {
+          str += `<option value="${cartData[i].id}">${cartData[i].cartNumber}</option>`;
+        }
+        $("#cartOption").html(str);
+      }
+
+      function getCartsFromUserId(id) {
+        let result;
+        $.ajax({
+          url: host + `orderservice/getCartFromUserId/${id}`,
+          type: "GET",
+          contentType: "application/json",
+          async: false,
+          success: function (cartFromUser) {
+            result = cartFromUser;
+          },
+        });
+        return result;
+      }
+
+      function addCart(data) {
+        let result;
+        $.ajax({
+          url: host + `orderservice/carts`,
+          type: "POST",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          async: false,
+          success: function (cartData) {
+            result = cartData;
+          },
+        });
+        return result;
+      }
+
+      function addItem(productId) {
+        let cartId = $("#cart_id").val();
+        let qty = $("#qty").val();
+        let productData = getProductById(productId);
+        let sku = productData.sku;
+        let name = productData.name;
+        let price = productData.price;
+        let stock = productData.stock;
+
+        if (stock > 0 && qty <= stock) {
+          const data = {
+            cartId: cartId,
+            productId: productId,
+            sku: sku,
+            name: name,
+            quantity: qty.length > 0 ? qty : 1,
+            price: price,
+          };
+          addCartProduct(data);
+          reduceProductStock(productId, qty);
+          reloadCartTable(cartId);
+          addModalItem();
+        } else {
+          toastFailed("Out of capacity")
+        }
+      }
+
+      function reloadCartTable(cart_id) {
+        // cart data
+        let cartData = getCartById(cart_id)
+        let status = cartData.status
+        $("#orderStatus").html(status)
+
+        // cart product data 
+        let cartProductData = getProductFromCartById(cart_id);
+        $("#cart_id").val(cart_id);
+        $('#confirm').val(cart_id)
+
+        if (cartProductData.length == 0) {
+          $("#dataorder").html(`
+            <tr class="text-center">
+                <td colspan="6" >
+                  No data entry
+                </td>
+            </tr>`);
+          $("#tfoot").html("");
+        } else {
+          writeProductsToCartTable(cartProductData);
+        }
+      }
+
+      function reduceProductStock(id, stock) {
+        let result;
+        $.ajax({
+          url: host + `storeservice/product/${id}/${stock}`,
+          type: "PATCH",
+          contentType: "application/json",
+          async: false,
+          success: function (response) {
+            result = response;
+          },
+        });
+        return result;
+      }
+
+      function increaseProductStock(id, stock) {
+        let result;
+        $.ajax({
+          url: host + `storeservice/product/increase/${id}/${stock}`,
+          type: "PATCH",
+          contentType: "application/json",
+          async: false,
+          success: function (response) {
+            result = response;
+          },
+        });
+        return result;
+      }
+
+      function writeProductsToCartTable(productFromCart) {
+        let str = "";
+        let countTotal = 0, qtyTotal = 0;
+        for (i = 0; i < productFromCart.length; i++) {
+          let total = productFromCart[i].price * productFromCart[i].quantity;
+          countTotal += total;
+          qtyTotal += productFromCart[i].quantity;
+          str += `
+              <tr class="text-center">
+                <td >${i + 1}</td>
+                <td class="text-start">${productFromCart[i].name}</td>
+                <td class="text-end">${formatter.format(
+            productFromCart[i].price
+          )}</td>
+                <td >${productFromCart[i].quantity}</td>
+                <td class="text-end">${formatter.format(total)}</td>
+                <td>
+                  <button
+                    onclick="
+                    removeProductFromCartTable(
+                    ${productFromCart[i].id},
+                    ${productFromCart[i].productId},
+                    ${productFromCart[i].quantity})"
+                    class="btn btn-outline-danger">X
+                  </button>
+                </td>
+              </tr>
+            `;
+        }
+        $("#dataorder").html(str);
+        $("#tfoot").html(`
+          <tr class="text-center">
+             <td></td>
+             <td>Total</td>
+             <td></td>
+             <td>${qtyTotal}</td>
+             <td class="text-end"> ${formatter.format(countTotal)}</td>
+             <td class="text-end"> </td>
+          </tr>`);
+      }
+
+      function removeProductFromCartTable(cart_product_id, id, stock) {
+        increaseProductStock(id, stock);
+        //delete cartProduct
+        let responseDelete = deleteCartProduct(cart_product_id);
+        console.log(responseDelete)
+        //reload table berdasarkan card id
+        reloadCartTable($("#cart_id").val());
+      }
+
+      function deleteCartProduct(cart_id) {
+        let result;
+        $.ajax({
+          url: host + `orderservice/cartProduct/${cart_id}`,
+          type: "DELETE",
+          contentType: "application/json",
+          async: false,
+          success: function (response) {
+            result = response;
+          },
+        });
+        return result;
+      }
+
+      function addCartProduct(data) {
+        let result;
+        $.ajax({
+          url: host + `orderservice/cartProducts`,
+          type: "POST",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          async: false,
+          success: function (cartData) {
+            result = cartData;
+          },
+        });
+        return result;
+      }
+
+      function getProductFromCartById(cart_id) {
+        let result;
+        $.ajax({
+          url: host + `orderservice/getProductFromCart/${cart_id}`,
+          type: "GET",
+          contentType: "application/json",
+          async: false,
+          success: function (cartData) {
+            result = cartData;
+          },
+        });
+        return result;
+      }
+      function addModalItem() {
+        $(".modal-title").html("Adding product items");
+        $(".modal-body").html(`
+          <p>
+             <div class="form-group" style="float:left">
+               <label for="qty">Qty: </label>
+               <input type="number" onkeyup="disabledOrNotAddItemButton(this.value)" id="qty" value="1" size="10" class="form-control">
+             </div>
+             <span style="float:right">
+             <label for="qty">Search: </label>
+               <input type="text" id="search" onkeyup="searchAndChangeTbody(this.value)" size="15" class="form-control">
+             </span>
+           </p>
+           <table class='table'>
+            <thead>
+                  <tr>
+                    <th>Add</th>
+                    <th>Product</th>
+                    <th>Description</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                  </tr>
+            <thead>
+            <tbody id="productBody">
+            </tbody>
+            </table>
+           `);
+        let productData = getProducts();
+        let str = "";
+        let qty = $("#qty").val();
+        for (i = 0; i < productData.length; i++) {
+          str += `
+                  <tr>
+                    <td><button  onclick="addItem(${productData[i].id
+            })" class="btn btn-success validQty">+</button></td>
+                    <td>${productData[i].name}</td>
+                    <td>${productData[i].description}</td>
+                    <td>${formatter.format(productData[i].price)}</td>
+                    <td>${productData[i].stock}</td>
+                  </tr>
+                  `;
+        }
+        $("#productBody").html(str);
+      }
+
+      function searchAndChangeTbody(name = "") {
+        let productData;
+        let str = "";
+        let qty = $("#qty").val();
+        if (name.length == 0 || name == " ") {
+          productData = getProducts();
+          for (i = 0; i < productData.length; i++) {
+            str += `
+                  <tr>
+                    <td><button  onclick="addItem(${productData[i].id
+              })" class="btn btn-success validQty">+</button></td>
+                    <td>${productData[i].name}</td>
+                    <td>${productData[i].description}</td>
+                    <td>${formatter.format(productData[i].price)}</td>
+                    <td>${productData[i].stock}</td>
+                  </tr>
+                  `;
+          }
+          $("#productBody").html(str);
+          disabledOrNotAddItemButton(qty);
+        } else {
+          productData = getProductByName(name);
+          for (i = 0; i < productData.length; i++) {
+            str += `
+                  <tr>
+                    <td><button  onclick="addItem(${productData[i].id
+              })" class="btn btn-success validQty">+</button></td>
+                    <td>${productData[i].name}</td>
+                    <td>${productData[i].description}</td>
+                    <td>${formatter.format(productData[i].price)}</td>
+                    <td>${productData[i].stock}</td>
+                  </tr>
+                  `;
+          }
+          $("#productBody").html(str);
+          disabledOrNotAddItemButton(qty);
+        }
+      }
+
+      function disabledOrNotAddItemButton(value) {
+        if (value == 0) {
+          $(".validQty").attr("disabled", "disabled");
+        } else {
+          $(".validQty").removeAttr("disabled");
+        }
+      }
+
+      function confirm(cart_id) {
+        let checkCartProduct = getProductFromCartById(cart_id)
+        if (checkCartProduct.length > 0) {
+          location.replace(`/pages/payment/${cart_id}`);
+        } else {
+          toastFailed("Add items before confirm payment")
+        }
+
+      }
+    </script>
+  </section>
+</body>
+
+</html>

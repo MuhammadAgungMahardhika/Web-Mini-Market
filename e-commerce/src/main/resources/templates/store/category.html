@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="https://www.thymeleaf.com" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+  layout:decorate="~{fragments/layout}">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Category Managemenet</title>
+  <!-- databale css -->
+  <link rel="stylesheet" href="/assets/extensions/datatables.net-bs5/css/dataTables.bootstrap5.min.css" />
+  <link rel="stylesheet" href="/assets/css/pages/datatables.css" />
+</head>
+
+<body>
+  <section layout:fragment="content">
+    <div class="page-heading">
+      <h1>CATEGORY PRODUCT MANAGEMENT</h1>
+
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="card-header">
+          <button type="button" class="btn btn-outline-primary block" data-bs-toggle="modal" data-bs-target="#default"
+            onclick="addCategoryModal()">
+            ADD NEW CATEGORY
+          </button>
+        </div>
+        <div class="card-body">
+          <table class="table" id="table1">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th class="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="showdata"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.datatables.net/v/bs5/dt-1.12.1/datatables.min.js"></script>
+    <script>
+      reloadData();
+      function reloadData() {
+        $.ajax({
+          url: host + "storeservice/categories",
+          type: "GET",
+          contentType: "application/json",
+          success: function (CategoryData) {
+            let str = "";
+            for (let i = 0; i < CategoryData.length; i++) {
+              str += `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${CategoryData[i].name}</td>
+                <td>${CategoryData[i].description}</td>
+                <td><span class="badge ${CategoryData[i].status == "Active"
+                  ? "bg-success"
+                  : "bg-secondary"
+                }">${CategoryData[i].status}</span>
+                </td>
+                <td class="text-center">
+                    <button
+                      value="${CategoryData[i].id}"
+                      onclick="getEditingCategory(this.value)"
+                      type="button"
+                      class="btn btn-outline-warning block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-edit"></i>
+                    </button>
+                    <button
+                      onclick="deleteModal(${CategoryData[i].id},'${CategoryData[i].name
+                }')"
+                      class="btn btn-outline-danger block"
+                      data-bs-toggle="modal"
+                      data-bs-target="#default">
+                      <i class="fa fa-trash"></i>
+                    </button>
+                  </td>
+              </tr>`;
+            }
+            $("#showdata").html(str);
+            initDataTable()
+          },
+        });
+      }
+
+      function addCategoryModal() {
+        $(".modal-title").html("Adding new category");
+        $(".modal-body").html(`
+            <div class="modal-body">
+              <label for="name">Name: </label>
+                  <div class="form-group">
+                    <input id="name" type="text" placeholder="name" class="form-control" >
+                  </div>
+              <label for="description">Description: </label>
+                  <div class="form-group">
+                    <input id="description" type="text" placeholder="description" class="form-control" >
+                  </div>
+                  <input type="hidden" value="Active" id="status"></input>
+            </div>
+            `);
+        $(".modal-footer").html(`
+              <button type="reset" class="btn" onclick="resetForm()">
+                <i class="bx bx-x d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Reset</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="saveCategory()"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>
+            `);
+      }
+
+      function getEditingCategory(id) {
+        $.ajax({
+          url: host + `storeservice/category/${id}`,
+          type: "GET",
+          contentType: "application/json",
+          success: function (CategoryData) {
+            editModal(CategoryData);
+          },
+        });
+      }
+      function editModal(CategoryData) {
+        $(".modal-title").html("Editing Category data");
+        $(".modal-body").html(
+          ` <div class="modal-body">
+              <label for="name">Name: </label>
+                  <div class="form-group">
+                    <input id="name" value="${CategoryData.name
+          }" type="text" placeholder="name" class="form-control" >
+                  </div>
+              <label for="description">Description: </label>
+                  <div class="form-group">
+                    <input id="description" value="${CategoryData.description
+          }" type="text" placeholder="description" class="form-control" >
+                  </div>
+              <label for="status">Status: </label>
+                  <select class="form-select" id="status">
+                     <option ${CategoryData.status == "Active" ? "selected='' " : ""
+          } value="Active">Active</option>
+                     <option ${CategoryData.status == "Non-active" ? "selected='' " : ""
+          } value="Non-active">Non-active</option>
+                     <option ${CategoryData.status == "Removed" ? "selected='' " : ""
+          } value="Non-active">Removed</option>
+                  </select>
+            </div>`
+        );
+        $(".modal-footer").html(
+          `<button
+                type="button"
+                class="btn btn-primary ms-1"
+                data-bs-dismiss="modal"
+                onclick="updateCategory(${CategoryData.id})"
+              >
+                <i class="bx bx-check d-block d-sm-none"></i>
+                <span class="d-none d-sm-block">Save</span>
+              </button>`
+        );
+      }
+      function resetForm() {
+        $("#name").val("");
+        $("#description").val("");
+      }
+      function saveCategory() {
+        const type = $("#name").val();
+        const unit = $("#description").val();
+        const status = $("#status").val();
+
+        let data = {
+          name: type,
+          description: unit,
+          status: status,
+        };
+        $.ajax({
+          url: host + "storeservice/categories",
+          type: "POST",
+          dataType: "json",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function (userData) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: "Category added",
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+          error: function (err) {
+            console.log(err.responseText);
+          },
+        });
+      }
+      function updateCategory(id) {
+        const name = $("#name").val();
+        const description = $("#description").val();
+        const status = $("#status").val();
+
+        let data = {
+          name: name,
+          description: description,
+          status: status,
+        };
+
+        $.ajax({
+          url: host + `storeservice/category/${id}`,
+          type: "PUT",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `Category Edited`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+          error: function (err) {
+            console.log(err);
+          },
+        });
+      }
+
+      function deleteModal(id, name) {
+        $(".modal-title").html(`Delete confirmation`);
+        $(".modal-body").html(
+          `Are you sure delete <b> ${name} </b> from the system?`
+        );
+        $(".modal-footer").html(
+          `<button
+              type="button"
+              value="${id}"
+              class="btn btn-danger ms-1"
+              data-bs-dismiss="modal"
+              onclick="deleteCategory(this.value)"
+            >
+              <i class="bx bx-check d-block d-sm-none"></i>
+              <span class="d-none d-sm-block">Delete Category</span>
+            </button>`
+        );
+      }
+
+      function deleteCategory(id) {
+        $.ajax({
+          url: host + `storeservice/category/${id}`,
+          type: "DELETE",
+          contentType: "application/json",
+          success: function (response) {
+            Swal.fire({
+              position: "top-end",
+              icon: "success",
+              title: `${response}`,
+              showConfirmButton: false,
+              timer: 1500,
+            }).then((result) => {
+              location.reload();
+            });
+          },
+        });
+      }
+    </script>
+  </section>
+</body>
+
+</html>
